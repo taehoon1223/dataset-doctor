@@ -84,7 +84,7 @@ reported.
 | `non_rectangular_obb` | WARNING | An OBB corner is more than 10° off 90° |
 | `degenerate_obb` | ERROR | OBB area under 1 px² |
 | `inconsistent_winding` | WARNING | OBB wound the opposite way to the rest of the dataset |
-| `invalid_polygon` | ERROR | Segment with < 3 points, zero area, or self-intersecting (Shapely `is_valid`) |
+| `invalid_polygon` | ERROR | Segment with < 3 points, zero area, or edges that cross each other. Edges that only touch or run back over each other are fine: that is how Ultralytics joins the parts of a multi-part COCO mask |
 | `duplicate_label` | WARNING | Same class, IoU ≥ 0.95 with an earlier label in the image |
 | `label_conflict` | WARNING | Different class, IoU ≥ 0.95 with an earlier label in the image |
 

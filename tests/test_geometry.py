@@ -116,7 +116,19 @@ def test_invalid_polygons(tmp_path):
         ("invalid_polygon", Severity.ERROR, 3)]
     assert "point" in issues[0].detail["reason"]
     assert issues[1].detail["reason"] == "zero area"
-    assert "Self-intersection" in issues[2].detail["reason"]
+    assert issues[2].detail["reason"].startswith("self-intersection")
+
+
+def test_polygons_that_only_touch_themselves_are_valid(tmp_path):
+    ds = make_dataset(tmp_path, "yolo-seg")
+    ds.add_label("a", "\n".join([
+        # Two squares joined the way Ultralytics merges a multi-part COCO mask: a zero-width
+        # bridge from (0.3, 0.2) to (0.6, 0.2) walked there and back.
+        "0 0.1 0.1 0.3 0.1 0.3 0.2 0.6 0.2 0.6 0.1 0.8 0.1 0.8 0.3 0.6 0.3 0.6 0.2 0.3 0.2 0.3 0.3 0.1 0.3",
+        # Two triangles meeting at a single corner (0.2, 0.6).
+        "0 0.2 0.6 0.1 0.5 0.3 0.5 0.2 0.6 0.3 0.7 0.1 0.7",
+    ]))
+    assert scan(ds.root, ds.fmt).issues == []
 
 
 def test_tiny_polygon(tmp_path):

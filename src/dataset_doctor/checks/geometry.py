@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import Counter
 
 import numpy as np
-import shapely
 from shapely.geometry import Polygon
 
 from dataset_doctor.core.models import Annotation, Dataset, Issue, Sample, Severity
@@ -39,6 +38,23 @@ def segments_intersect(p1, p2, q1, q2) -> bool:
 def obb_self_intersects(pts: np.ndarray) -> bool:
     # Opposite edges (0-1 vs 2-3, 1-2 vs 3-0) cross when the vertex order is twisted.
     return segments_intersect(pts[0], pts[1], pts[2], pts[3]) or segments_intersect(pts[1], pts[2], pts[3], pts[0])
+
+
+def polygon_first_crossing(pts: np.ndarray) -> tuple[int, int] | None:
+    """First pair of edges (i, j) of the closed polygon that properly cross, or None.
+
+    Edges that only touch or overlap don't count: that is how Ultralytics joins the parts of a
+    multi-part COCO mask, with a zero-width bridge walked there and back.
+    """
+    a, b = pts, np.roll(pts, -1, axis=0)  # edge i runs from a[i] to b[i]
+
+    def side(p, q, r):  # signed turn p -> q -> r, broadcast over all edge pairs
+        return (q[..., 0] - p[..., 0]) * (r[..., 1] - p[..., 1]) - (q[..., 1] - p[..., 1]) * (r[..., 0] - p[..., 0])
+
+    ai, bi, aj, bj = a[:, None], b[:, None], a[None, :], b[None, :]
+    crossing = (side(ai, bi, aj) * side(ai, bi, bj) < 0) & (side(aj, bj, ai) * side(aj, bj, bi) < 0)
+    i, j = np.nonzero(np.triu(crossing))
+    return (int(i[0]), int(j[0])) if len(i) else None
 
 
 def obb_max_angle_deviation(pts: np.ndarray) -> float:
@@ -132,10 +148,13 @@ def seg_geometry(sample: Sample):
             yield _issue("invalid_polygon", Severity.ERROR, sample, ann, reason=f"{len(pts)} point(s), need at least 3")
             continue
         poly = Polygon(pts)
+        crossing = None if poly.is_valid else polygon_first_crossing(pts)  # is_valid is the cheap pre-check
         if poly.area < DEGENERATE_AREA_PX:
             yield _issue("invalid_polygon", Severity.ERROR, sample, ann, reason="zero area")
-        elif not poly.is_valid:
-            yield _issue("invalid_polygon", Severity.ERROR, sample, ann, reason=shapely.is_valid_reason(poly))
+        elif crossing is not None:
+            i, j = crossing
+            yield _issue("invalid_polygon", Severity.ERROR, sample, ann,
+                         reason=f"self-intersection: edges {i + 1} and {j + 1} cross")
         else:
             w_px, h_px = pts.max(axis=0) - pts.min(axis=0)
             if min(w_px, h_px) < TINY_BOX_PX:
