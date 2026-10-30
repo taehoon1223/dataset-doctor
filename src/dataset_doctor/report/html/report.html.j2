@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dataset Doctor Report</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --border: rgba(11, 11, 11, 0.10);
+    --bar: #2a78d6;
+    --ann: #2a78d6;
+    --critical: #d03b3b;
+    --warning: #fab219;
+    --info: #898781;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --grid: #2c2c2a;
+      --border: rgba(255, 255, 255, 0.10);
+      --bar: #3987e5;
+      --ann: #3987e5;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --grid: #2c2c2a;
+    --border: rgba(255, 255, 255, 0.10);
+    --bar: #3987e5;
+    --ann: #3987e5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 64px; background: var(--page); color: var(--text-primary);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 32px 0 12px; }
+  h3 { font-size: 13px; margin: 0 0 8px; color: var(--text-secondary); font-weight: 600; }
+  .sub { color: var(--text-secondary); margin: 0; overflow-wrap: anywhere; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+  th { color: var(--text-muted); font-weight: 500; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sev { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; }
+  .sev::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--dot); }
+  .sev.ERROR { --dot: var(--critical); }
+  .sev.WARNING { --dot: var(--warning); }
+  .sev.INFO { --dot: var(--info); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  .tile .label { color: var(--text-secondary); font-size: 12px; }
+  .tile .value { font-size: 22px; font-weight: 600; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-top: 12px; }
+  .bars { max-height: 360px; overflow-y: auto; }
+  .bar-row { display: grid; grid-template-columns: minmax(60px, 140px) 1fr 64px; align-items: center; gap: 8px; height: 26px; }
+  .bar-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+  .bar-row .track { height: 14px; }
+  .bar-row .fill { height: 100%; background: var(--bar); border-radius: 0 4px 4px 0; min-width: 0; }
+  .bar-row .fill:hover { filter: brightness(1.15); }
+  .bar-row .count { text-align: right; font-variant-numeric: tabular-nums; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border);
+          border-radius: 999px; background: var(--surface); cursor: pointer; user-select: none; }
+  .chip input { margin: 0; }
+  .chip .n { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  button { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);
+           background: var(--surface); color: var(--text-primary); cursor: pointer; }
+  #shown { color: var(--text-muted); margin-left: auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .card[hidden] { display: none; }
+  .frame { position: relative; background: var(--grid); }
+  .frame img { display: block; width: 100%; height: auto; min-height: 60px; }
+  .frame svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  polygon { fill: none; stroke: var(--ann); stroke-width: 1.5px; vector-effect: non-scaling-stroke; opacity: 0.7; }
+  polygon.bad { stroke: var(--critical); stroke-width: 2.5px; fill: rgba(208, 59, 59, 0.15); opacity: 1; }
+  .card .body { padding: 10px 12px; }
+  .card .path { font-family: ui-monospace, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; margin: 0 0 6px; }
+  .card ul { list-style: none; margin: 0; padding: 0; }
+  .card li { padding: 3px 0; border-top: 1px solid var(--grid); }
+  .card li .code { font-weight: 600; }
+  .card li .meta { color: var(--text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+  .empty { color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Dataset Doctor</h1>
+  <p class="sub">v{{ version }} · {{ fmt }} · {{ root }}</p>
+
+  <h2>Issues</h2>
+  {% if summary %}
+  <div class="panel">
+    <table>
+      <thead><tr><th>Severity</th><th>Check</th><th class="num">Count</th></tr></thead>
+      <tbody>
+      {% for row in summary %}
+        <tr><td><span class="sev {{ row.severity }}">{{ row.severity }}</span></td><td>{{ row.code }}</td><td class="num">{{ "{:,}".format(row.count) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No issues found.</p>
+  {% endif %}
+
+  <h2>Dataset statistics</h2>
+  <div class="tiles">
+    <div class="panel tile"><div class="label">Images</div><div class="value">{{ "{:,}".format(stats.images) }}</div></div>
+    <div class="panel tile"><div class="label">Labels</div><div class="value">{{ "{:,}".format(stats.labels) }}</div></div>
+    <div class="panel tile"><div class="label">Class imbalance (max / min)</div><div class="value">{{ "%.1f×"|format(stats.imbalance_ratio) if stats.imbalance_ratio else "–" }}</div></div>
+    <div class="panel tile"><div class="label">Objects per image (mean · max)</div><div class="value">{% if stats.objects_per_image.mean is not none %}{{ "%.1f"|format(stats.objects_per_image.mean) }} · {{ stats.objects_per_image.max|int }}{% else %}–{% endif %}</div></div>
+    <div class="panel tile"><div class="label">Median box size (√area)</div><div class="value">{{ "%.0f px"|format(stats.box_size.sqrt_area_px.median) if stats.box_size.sqrt_area_px else "–" }}</div></div>
+    <div class="panel tile"><div class="label">Median aspect ratio (w / h)</div><div class="value">{{ "%.2f"|format(stats.aspect_ratio.median) if stats.aspect_ratio else "–" }}</div></div>
+  </div>
+
+  <div class="charts">
+    <div class="panel">
+      <h3>Labels per class</h3>
+      <div class="bars">
+      {% for c in classes %}
+        <div class="bar-row">
+          <span class="name" title="{{ c.name or c.id }}">{{ c.name if c.name is not none else "class " ~ c.id }}</span>
+          <div class="track"><div class="fill" style="width: {{ '%.2f'|format(c.pct) }}%" title="{{ c.name or c.id }}: {{ c.count }}"></div></div>
+          <span class="count">{{ "{:,}".format(c.count) }}</span>
+        </div>
+      {% else %}
+        <p class="empty">No labels.</p>
+      {% endfor %}
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Box size (COCO buckets: small &lt; 32², medium &lt; 96² px)</h3>
+      {% for s in sizes %}
+        <div class="bar-row">
+          <span class="name">{{ s.name }}</span>
+          <div class="track"><div class="fill" style="width: {{ '%.2f'|format(s.pct) }}%" title="{{ s.name }}: {{ s.count }}"></div></div>
+          <span class="count">{{ "{:,}".format(s.count) }}</span>
+        </div>
+      {% endfor %}
+      <h3 style="margin-top: 16px">Resolutions (top 10)</h3>
+      <table>
+        <thead><tr><th>Width × height</th><th class="num">Images</th></tr></thead>
+        <tbody>
+        {% for r in stats.resolutions %}
+          <tr><td>{{ r.width }} × {{ r.height }}</td><td class="num">{{ "{:,}".format(r.count) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if cards %}
+  <h2>Problem samples</h2>
+  <div class="filters">
+    {% for f in filters %}
+      <label class="chip"><input type="checkbox" data-code="{{ f.code }}" checked><span class="sev {{ f.severity }}"></span>{{ f.code }} <span class="n">{{ f.count }}</span></label>
+    {% endfor %}
+    <button type="button" id="all">All</button>
+    <button type="button" id="none">None</button>
+    <span id="shown"></span>
+  </div>
+  <div class="cards">
+    {% for card in cards %}
+    <article class="card" data-codes="{{ card.codes }}">
+      {% if card.src %}
+      <div class="frame">
+        <img src="{{ card.src }}" alt="{{ card.title }}" loading="lazy">
+        <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
+          {% for p in card.polygons %}
+          <polygon points="{{ p.points }}" data-codes="{{ p.codes }}"{% if p.codes %} class="bad"{% endif %}><title>line {{ p.line }} · {{ class_names.get(p.cls) or "class " ~ p.cls }}{% if p.codes %} · {{ p.codes }}{% endif %}</title></polygon>
+          {% endfor %}
+        </svg>
+      </div>
+      {% endif %}
+      <div class="body">
+        <p class="path">{{ card.title }}</p>
+        <ul>
+          {% for i in card.issues %}
+          <li><span class="sev {{ i.severity }}"></span> <span class="code">{{ i.code }}</span>{% if i.line %} <span class="meta">line {{ i.line }}</span>{% endif %}{% if i.detail %}<div class="meta">{{ i.detail }}</div>{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+</main>
+<script>
+  const chips = [...document.querySelectorAll("input[data-code]")];
+  const cards = [...document.querySelectorAll(".card")];
+  const polygons = [...document.querySelectorAll("polygon[data-codes]")];
+  const has = (el, active) => el.dataset.codes.split(" ").some((c) => active.has(c));
+  function apply() {
+    const active = new Set(chips.filter((c) => c.checked).map((c) => c.dataset.code));
+    let shown = 0;
+    for (const card of cards) {
+      card.hidden = !has(card, active);
+      if (!card.hidden) shown++;
+    }
+    for (const p of polygons) p.classList.toggle("bad", has(p, active));
+    const counter = document.getElementById("shown");
+    if (counter) counter.textContent = `${shown} of ${cards.length} samples`;
+  }
+  for (const c of chips) c.addEventListener("change", apply);
+  for (const [id, value] of [["all", true], ["none", false]]) {
+    document.getElementById(id)?.addEventListener("click", () => { chips.forEach((c) => (c.checked = value)); apply(); });
+  }
+  apply();
+</script>
+</body>
+</html>
