@@ -3,7 +3,7 @@ import shutil
 
 import pytest
 from fixtures import make_dataset
-from PIL import Image
+from PIL import Image, JpegImagePlugin
 
 from dataset_doctor import scan
 from dataset_doctor.core.models import Severity
@@ -73,6 +73,73 @@ def test_truncated_jpeg_is_corrupt(tmp_path):
     ds.image_path("a").unlink()
     [issue] = scan(ds.root, ds.fmt).issues
     assert issue.code == "corrupt_image" and "end-of-image" in issue.detail["error"]
+
+
+@pytest.mark.parametrize("truncated", [False, True])
+def test_bmp_pixel_data_is_decoded(tmp_path, truncated):
+    ds = make_dataset(tmp_path, "yolo-hbb")
+    ds.add_label("a", CLEAN_LINES["yolo-hbb"])
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 64), (200, 10, 10)).save(buf, "BMP")
+    bmp = ds.image_path("a", suffix=".bmp")
+    bmp.write_bytes(buf.getvalue()[:100] if truncated else buf.getvalue())
+    ds.image_path("a").unlink()
+
+    result = scan(ds.root, ds.fmt)
+
+    if truncated:
+        [issue] = result.issues
+        assert (issue.code, issue.severity) == ("corrupt_image", Severity.ERROR)
+        assert result.dataset.samples[0].size is None
+    else:
+        assert result.issues == []
+        assert result.dataset.samples[0].size == (64, 64)
+
+
+@pytest.mark.parametrize("progressive", [False, True])
+@pytest.mark.parametrize("orientation", [1, 6])
+def test_jpeg_decodes_small_but_preserves_original_size(tmp_path, monkeypatch, progressive, orientation):
+    ds = make_dataset(tmp_path, "yolo-hbb")
+    ds.add_label("a", "0 0.5 0.5 0.004 0.004")  # Not tiny at original size, tiny at draft size.
+    jpeg = ds.image_path("a", suffix=".jpg")
+    exif = Image.Exif()
+    exif[0x0112] = orientation
+    with Image.new("RGB", (1600, 800), (100, 20, 40)) as im:
+        im.save(jpeg, "JPEG", progressive=progressive, exif=exif)
+    ds.image_path("a").unlink()
+    decoded_sizes = []
+    original_load = JpegImagePlugin.JpegImageFile.load
+
+    def record_load(im, *args, **kwargs):
+        decoded_sizes.append(im.size)
+        return original_load(im, *args, **kwargs)
+
+    monkeypatch.setattr(JpegImagePlugin.JpegImageFile, "load", record_load)
+
+    result = scan(ds.root, ds.fmt)
+
+    assert result.issues == []
+    assert result.dataset.samples[0].size == ((800, 1600) if orientation == 6 else (1600, 800))
+    assert decoded_sizes and all(w <= 200 and h <= 100 for w, h in decoded_sizes)
+
+
+@pytest.mark.parametrize("progressive", [False, True])
+@pytest.mark.parametrize("damage", ["missing_eoi", "cut_body", "bad_header"])
+def test_jpeg_draft_still_detects_corruption(tmp_path, progressive, damage):
+    ds = make_dataset(tmp_path, "yolo-hbb")
+    ds.add_label("a", CLEAN_LINES["yolo-hbb"])
+    buf = io.BytesIO()
+    with Image.new("RGB", (512, 512), (100, 20, 40)) as im:
+        im.save(buf, "JPEG", progressive=progressive)
+    data = buf.getvalue()
+    damaged = {"missing_eoi": data[:-2], "cut_body": data[:len(data) // 2],
+               "bad_header": b"bad" + data[3:]}[damage]
+    ds.image_path("a", suffix=".jpg").write_bytes(damaged)
+    ds.image_path("a").unlink()
+
+    [issue] = scan(ds.root, ds.fmt).issues
+
+    assert (issue.code, issue.severity) == ("corrupt_image", Severity.ERROR)
 
 
 def test_duplicate_image_in_same_split(tmp_path):

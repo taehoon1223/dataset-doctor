@@ -71,8 +71,11 @@ def _load_sample(split: str, image: Path, spec, names: dict[int, str] | None) ->
                 if im.getexif().get(EXIF_ORIENTATION) in (5, 6, 7, 8):  # rotated 90°: training sees w/h swapped
                     w, h = h, w
                 fmt = im.format
-            if fmt == "JPEG" and not data.rstrip(b"\x00").endswith(b"\xff\xd9"):
-                raise OSError("truncated JPEG (missing end-of-image marker)")
+                if fmt == "JPEG" and not data.rstrip(b"\x00").endswith(b"\xff\xd9"):
+                    raise OSError("truncated JPEG (missing end-of-image marker)")
+                if fmt == "JPEG":
+                    im.draft("RGB", (1, 1))  # Decode at 1/8 size; geometry keeps the original w/h above.
+                im.load()  # Header verification alone misses truncated pixel data (e.g. BMP).
             sample.size = (w, h)
         except Exception as e:  # Pillow raises many unrelated exception types for broken files
             sample.image_error = f"{type(e).__name__}: {e}"
