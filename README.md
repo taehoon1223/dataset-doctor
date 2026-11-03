@@ -54,12 +54,19 @@ The Ultralytics layout: `images/<split>/...` with the matching `labels/<split>/.
 
 `fix` copies the dataset to `--out` (which must not exist) and repairs the copy; the original is never
 modified. Every change is listed in `fix_log.json` with the line before and after.
+The effective YAML configuration (including one passed with `--data`) is saved as `--out/data.yaml`,
+with absolute split paths made relative to the copied dataset. The `path` key is removed so training
+uses the copied YAML's directory. Relative path spelling and comments are preserved when no configuration
+change is needed. Images and labels must map into the copy; external paths are rejected before copying.
+Links inside the dataset are copied as files/directories and repaired at their copied locations, even
+when their targets are external. A path traversing a link followed by `..` must be replaced with a direct
+dataset path before fixing.
 
 | Flag | Repairs |
 |---|---|
 | `--clip-coords` | `coord_out_of_range`: clips coordinates into 0–1 (HBB: clips the box edges). Clipping a rotated box that crosses the image border bends it, so it may then show up as `non_rectangular_obb`. |
 | `--reorder-obb` | `self_intersecting_obb`, `inconsistent_winding`: puts the corners in convex order with the dataset's majority winding, keeping the first corner first. |
-| `--dedup` | `duplicate_label` (keeps the first line) and `duplicate_image` within a split (keeps the first file). |
+| `--dedup` | `duplicate_label` (keeps the first line) and `duplicate_image` within a split. Prefers a file with labels; otherwise keeps the first file. Image groups with differing label file contents, including empty background labels, are preserved for review. |
 
 Anything that needs a judgement call — `split_leak`, `label_conflict`, `class_id_out_of_range`, … — is only
 reported.
