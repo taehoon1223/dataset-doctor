@@ -1,4 +1,4 @@
-"""Ultralytics dataset layout: images/<split>/... with labels/<split>/... next to it."""
+"""Ultralytics dataset layout: images/<split>/... (or flat images/...) with labels/<split>/... next to it."""
 from __future__ import annotations
 
 import hashlib
@@ -115,9 +115,11 @@ def _read_data_yaml(path: Path, root: Path) -> tuple[dict[int, str] | None, dict
 
 def _discover_splits(root: Path) -> dict[str, list[Path]]:
     images_dir = root / "images"
-    subdirs = [d for d in images_dir.iterdir() if d.is_dir()] if images_dir.is_dir() else []
-    if not subdirs:
-        raise ValueError(f"expected Ultralytics layout {images_dir}{os.sep}<split>{os.sep} (or pass --data)")
+    if not images_dir.is_dir():
+        raise ValueError(f"expected Ultralytics layout {images_dir}{os.sep}[<split>{os.sep}] (or pass --data)")
+    subdirs = [d for d in images_dir.iterdir() if d.is_dir()]
+    if not subdirs:  # flat layout: images/*.jpg with labels/*.txt, scanned as a single split
+        return {images_dir.name: [images_dir]}
     order = {name: i for i, name in enumerate(SPLIT_ORDER)}
     subdirs.sort(key=lambda d: (order.get(d.name, len(order)), d.name))
     return {d.name: [d] for d in subdirs}

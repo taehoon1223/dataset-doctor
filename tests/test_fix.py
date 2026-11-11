@@ -28,6 +28,15 @@ def test_clip_coords(tmp_path):
     assert scan(out, ds.fmt).issues == []
 
 
+def test_fix_flat_layout(tmp_path):
+    ds = make_dataset(tmp_path, "yolo-obb")
+    ds.add_label("a", "0 0.1 0.1 1.2 0.1 1.2 0.3 0.1 0.3", split="")  # images/a.png with labels/a.txt
+    out = tmp_path / "fixed"
+    changes = fix_dataset(ds.root, out, ds.fmt, clip_coords=True)
+    assert [c["label_file"] for c in changes] == ["labels/a.txt"]
+    assert scan(out, ds.fmt).issues == []
+
+
 def test_clip_hbb_keeps_box_inside_image(tmp_path):
     ds = make_dataset(tmp_path, "yolo-hbb")
     ds.add_label("a", "0 0.9 0.5 0.4 0.2")  # spans x 0.7..1.1

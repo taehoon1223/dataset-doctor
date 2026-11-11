@@ -162,6 +162,16 @@ def test_split_leak(tmp_path):
     assert issue.detail == {"splits": ["train", "val"], "same_as": ds.image_path("a")}
 
 
+def test_flat_layout_is_one_split(tmp_path):
+    ds = make_dataset(tmp_path, "yolo-hbb")
+    ds.add_label("a", CLEAN_LINES["yolo-hbb"], split="")  # images/a.png with labels/a.txt
+    orphan = ds.label_path("ghost", split="")
+    orphan.write_text(CLEAN_LINES["yolo-hbb"])
+    result = scan(ds.root, ds.fmt)
+    assert result.dataset.splits == ["images"]
+    assert [(i.code, i.label_file) for i in result.issues] == [("label_without_image", orphan)]
+
+
 def test_missing_images_dir_is_an_error(tmp_path):
     with pytest.raises(ValueError, match="Ultralytics layout"):
         scan(tmp_path, "yolo-hbb")

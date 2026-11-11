@@ -38,8 +38,8 @@ dataset-doctor fix  ./dataset --format yolo-obb --out ./dataset_fixed --clip-coo
 - `--format` (required): `yolo-hbb` (`cls cx cy w h`), `yolo-obb` (`cls x1 y1 ... x4 y4`) or
   `yolo-seg` (`cls x1 y1 ... xn yn`), all normalized to 0–1.
 - `--data`: a `data.yaml` with `train`/`val`/`test` image folders (relative to the dataset) and `names` or `nc`.
-  Defaults to `DATASET/data.yaml` if it exists. Without one, splits are the folders under `images/` and class
-  ids are only checked for being non-negative integers.
+  Defaults to `DATASET/data.yaml` if it exists. Without one, splits are the folders under `images/` (or
+  `images/` itself if it has no subfolders) and class ids are only checked for being non-negative integers.
 - `--report json|html` writes `report.json` or `index.html` into `--out` (default `report/`). The HTML report
   has dataset statistics, a filter per check, and every problem sample with its labels drawn on the image
   (problem labels in red).
@@ -48,7 +48,8 @@ dataset-doctor fix  ./dataset --format yolo-obb --out ./dataset_fixed --clip-coo
 ### Dataset layout
 
 The Ultralytics layout: `images/<split>/...` with the matching `labels/<split>/....txt` next to it (the last
-`images` folder in an image path is swapped for `labels`). An empty label file marks a background image.
+`images` folder in an image path is swapped for `labels`). A flat `images/...` with `labels/....txt` and no
+split folders is scanned as a single split. An empty label file marks a background image.
 
 ### fix
 
